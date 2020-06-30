@@ -31,5 +31,31 @@ encryptMessage m n e= map (stringSizer.show) (map (encryptChunk n e) m)
 
 totientFunction x y = lcm' (x-1) (y - 1)
 
+decryptorStringSplit [] = []
+decryptorStringSplit xs = (take 3 xs) :(decryptorStringSplit (drop 3 xs))
 
-
+main = do
+    putStrLn "encrypt or decrypt? (e/d)"
+    text <- getLine
+    if head text == 'e'
+        then do
+            putStrLn "Input your Message"
+            message <- getLine
+            putStrLn "Input your public key"
+            keyString <- getLine
+            putStrLn "Input your exponent"
+            eString <- getLine
+            let publicE = (read eString :: Int)
+                publicKey = (read keyString :: Int)
+            putStrLn (concat (encryptMessage (convertString2Num message) publicKey publicE))
+        else do 
+            putStrLn "Input your Message"
+            message <- getLine
+            putStrLn "Input your public key"
+            keyString <- getLine
+            
+            putStrLn "Input your exponent"
+            dString <- getLine
+            let privateD = (read dString :: Int)
+                publicKey = (read keyString :: Int)
+            putStrLn (convertNum2String (concat (encryptMessage (decryptorStringSplit message) publicKey privateD)))
