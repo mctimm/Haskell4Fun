@@ -34,6 +34,18 @@ totientFunction x y = lcm' (x-1) (y - 1)
 decryptorStringSplit [] = []
 decryptorStringSplit xs = (take 3 xs) :(decryptorStringSplit (drop 3 xs))
 
+tuplemulti (x,y) z = (z*x,z*y)
+tupleadd (x,y) (a,b)  = (x+a,y+b)
+
+getDfromPrivatekey :: Int -> Int -> Int -> Maybe (Int,Int)
+getDfromPrivatekey x y e = 
+    let helper :: (Int,Int) -> (Int,Int) -> Int -> Int -> Maybe (Int,Int)
+        helper tTuple eTuple t 0 = if t == 1 
+            then Just tTuple
+            else Nothing 
+        helper tTuple eTuple t e = helper eTuple (tupleadd tTuple (tuplemulti eTuple ((0-1)*(div t e)))) e (mod t e)
+    in helper (0,1) (1, ((-1)*(div (totientFunction x y) e))) e ((totientFunction x y) `mod` e) 
+
 main = do
     putStrLn "encrypt or decrypt? (e/d)"
     text <- getLine
