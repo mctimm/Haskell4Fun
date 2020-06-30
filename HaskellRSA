@@ -1,0 +1,2 @@
+convertString2num [] = []
+convertString2num (x:xs) = show(fromEnum x):(convertString2num xs) 
