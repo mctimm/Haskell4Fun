@@ -1,14 +1,14 @@
-stringSizer x = if length x >= 3
+stringSizer x y= if length x >= y
     then x
-    else stringSizer ("0" ++ x)
-convertString2Num x = 
+    else stringSizer ("0" ++ x) y
+convertString2Num x y= 
     let
-        convertChars2Num [] = []
-        convertChars2Num (x:xs) = (stringSizer(show(fromEnum x))):(convertChars2Num xs)
-    in convertChars2Num x
+        convertChars2Num [] _= []
+        convertChars2Num (x:xs) y = ((\y x -> stringSizer x y) y (show(fromEnum x))):(convertChars2Num xs y)
+    in convertChars2Num x y
 
-convertNum2String [] = []
-convertNum2String x = (toEnum (read (take 3 x) :: Int) :: Char):(convertNum2String (drop 3 x))
+convertNum2String [] _ = []
+convertNum2String x y = (toEnum (read (take y x) :: Int) :: Char):(convertNum2String (drop y x) y)
 
 testPrime1 = 17
 testPrime2 = 31
@@ -27,27 +27,28 @@ encryptChunk n e m =
         helper m x n e = helper m (mod (x*m) n) n (e-1)
     in helper (read m :: Int) 1 n e
 
-encryptMessage m n e= map (stringSizer.show) (map (encryptChunk n e) m)
+encryptMessage m n e y= map (((\y x -> stringSizer x y)y).show) (map (encryptChunk n e) m)
 
 totientFunction x y = lcm' (x-1) (y - 1)
 
-decryptorStringSplit [] = []
-decryptorStringSplit xs = (take 3 xs) :(decryptorStringSplit (drop 3 xs))
+decryptorStringSplit [] _= []
+decryptorStringSplit xs y = (take y xs) :(decryptorStringSplit (drop y xs) y)
 
 tuplemulti (x,y) z = (z*x,z*y)
 tupleadd (x,y) (a,b)  = (x+a,y+b)
 
-getDfromPrivatekey :: Int -> Int -> Int -> Maybe (Int,Int)
+getDfromPrivatekey :: Int -> Int -> Int -> Maybe Int
 getDfromPrivatekey x y e = 
-    let helper :: (Int,Int) -> (Int,Int) -> Int -> Int -> Maybe (Int,Int)
+    let totient = (totientFunction x y)
+        helper :: (Int,Int) -> (Int,Int) -> Int -> Int -> Maybe Int
         helper tTuple eTuple t 0 = if t == 1 
-            then Just tTuple
+            then Just (((snd tTuple) + totient) `mod` totient)
             else Nothing 
         helper tTuple eTuple t e = helper eTuple (tupleadd tTuple (tuplemulti eTuple ((0-1)*(div t e)))) e (mod t e)
-    in helper (0,1) (1, ((-1)*(div (totientFunction x y) e))) e ((totientFunction x y) `mod` e) 
+    in helper (0,1) (1, ((-1)*(div totient e))) e (totient `mod` e) 
 
 main = do
-    putStrLn "encrypt or decrypt? (e/d)"
+    putStrLn "encrypt,decrypt,or get d value? (e/d)"
     text <- getLine
     if head text == 'e'
         then do
@@ -59,7 +60,7 @@ main = do
             eString <- getLine
             let publicE = (read eString :: Int)
                 publicKey = (read keyString :: Int)
-            putStrLn (concat (encryptMessage (convertString2Num message) publicKey publicE))
+            putStrLn (concat (encryptMessage (convertString2Num message (length keyString)) publicKey publicE (length keyString)))
         else do 
             putStrLn "Input your Message"
             message <- getLine
@@ -70,4 +71,4 @@ main = do
             dString <- getLine
             let privateD = (read dString :: Int)
                 publicKey = (read keyString :: Int)
-            putStrLn (convertNum2String (concat (encryptMessage (decryptorStringSplit message) publicKey privateD)))
+            putStrLn (convertNum2String (concat (encryptMessage (decryptorStringSplit message (length keyString)) publicKey privateD (length keyString))) (length keyString))
