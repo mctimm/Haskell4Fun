@@ -48,7 +48,7 @@ getDfromPrivatekey x y e =
     in helper (0,1) (1, ((-1)*(div totient e))) e (totient `mod` e) 
 
 main = do
-    putStrLn "encrypt,decrypt,or get d value? (e/d)"
+    putStrLn "encrypt,decrypt,or get d value? (e/d/g)"
     text <- getLine
     if head text == 'e'
         then do
@@ -61,14 +61,27 @@ main = do
             let publicE = (read eString :: Int)
                 publicKey = (read keyString :: Int)
             putStrLn (concat (encryptMessage (convertString2Num message (length keyString)) publicKey publicE (length keyString)))
-        else do 
-            putStrLn "Input your Message"
-            message <- getLine
-            putStrLn "Input your public key"
-            keyString <- getLine
-            
-            putStrLn "Input your exponent"
-            dString <- getLine
-            let privateD = (read dString :: Int)
-                publicKey = (read keyString :: Int)
-            putStrLn (convertNum2String (concat (encryptMessage (decryptorStringSplit message (length keyString)) publicKey privateD (length keyString))) (length keyString))
+        else if head text == 'd' 
+            then do 
+                putStrLn "Input your Message"
+                message <- getLine
+                putStrLn "Input your public key"
+                keyString <- getLine
+                putStrLn "Input your exponent"
+                dString <- getLine
+                let privateD = (read dString :: Int)
+                    publicKey = (read keyString :: Int)
+                putStrLn (convertNum2String (concat (encryptMessage (decryptorStringSplit message (length keyString)) publicKey privateD (length keyString))) (length keyString))
+            else if head text == 'g'
+                then do
+                    putStrLn "Input your larger private key"
+                    keyString1 <- getLine
+                    putStrLn "Input your second private key"
+                    keyString2 <- getLine
+                    putStrLn "Input your exponent"
+                    eString <- getLine
+                    let privateKey1 = (read keyString1 :: Int)
+                        privateKey2 = (read keyString2 :: Int)
+                        e = (read eString :: Int)
+                    putStrLn (show (getDfromPrivatekey privateKey1 privateKey2 e))
+                else putStrLn "Invalid input"
