@@ -28,4 +28,4 @@ boardChecker z =
                     && ((selector5x5 x y z) == (selector5x5 (x) (y+q) z)))) && helper2x2 (x+1) y z q
     in helper2x2 1 1 z 4 && helper2x2 1 1 z 3 && helper2x2 1 1 z 2 && helper2x2 1 1 z 1
 --Possible Solution
-k = Board ((False, False, False, True, True), (True, False, True, False, False), (False, True, True, True, False), (False,True,False, False, True), (True,True,True,False,False))
+k = Board ((False, False, True, True, True), (False, True, True, False, False), (False, False, True, True, False), (False,True,True, False, False), (False,False,True,True,True))
