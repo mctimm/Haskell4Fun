@@ -1,14 +1,33 @@
 --Conways Game of Life in Haskell
+import System.Random
 
 data Cell = Alive | Dead deriving (Eq)
 
 instance Show Cell where
-    show Alive = "A"
-    show Dead = "X"
+    show Alive = "@"
+    show Dead = "_"
 
-data World = World [[Cell]] 
+data World = World [[Cell]] deriving (Eq)
 
-makeWorld x y = (World (take x (repeat (take y (repeat Dead)))))
+makeDeadWorld x y = (World (take y (repeat (take x (repeat Dead)))))
+
+headCons y (x:xs) = (y:x):(xs)
+headCons y [] = [[y]]
+
+makeRandomWorld :: Int -> Int -> Int -> World
+makeRandomWorld x y seed =
+    let 
+        randomValues :: [Int]
+        randomValues =  (randomRs (0,1) (mkStdGen seed))
+        helper x y xCap yCap u@(r:rs) = if (y >= yCap)
+            then []
+            else if (x >= xCap)
+                then []:(helper 0 (y+1) xCap yCap u)
+                else if r == 1
+                    then (Alive) `headCons` (helper (x + 1) y xCap yCap rs)
+                    else (Dead) `headCons` (helper (x + 1) y xCap yCap rs)
+    in World (helper 0 0 x y randomValues)
+
 
 showLine [] = "\n"
 showLine (x:xs) = show x ++ showLine xs
@@ -32,6 +51,7 @@ getSurroundingCells world x y =
 
 testWorld = (World [[Alive,Dead,Dead],[Alive,Alive,Dead],[Alive,Alive,Dead]]) 
 testWorld2 = (World [[Dead,Dead,Dead,Dead],[Dead,Alive,Alive,Dead],[Dead,Alive,Alive,Dead],[Dead,Dead,Dead,Dead]])
+testWorld3 = (World [[Dead,Dead,Alive,Alive], [Dead,Alive,Alive,Dead],[Alive,Alive,Dead,Dead]])
 cellTurn :: Cell -> World ->Int->Int -> Cell
 cellTurn (Alive) world x y =  if neighbors == 2 || neighbors == 3 
     then Alive
@@ -45,10 +65,17 @@ cellTurn (Dead) world x y = if neighbors == 3
 worldX (World z) = (length (head z))
 worldY (World z) = (length z) 
 
-headCons y (x:xs) = (y:x):(xs)
-headCons y [] = [[y]]
-taketurn :: World -> World
-taketurn world = 
+takeTurnReturn world = 
+    let 
+        helper world x y xCap yCap = if (y >= yCap)
+            then []
+            else if (x >= xCap)
+                then []:helper world 0 (y+1) xCap yCap
+                else (cellTurn (getCell world x y) world x y) `headCons` (helper world (x+1) (y) xCap yCap)
+    in (world,(World (helper world 0 0 (worldX world ) (worldY world))))
+
+takeTurn :: World -> World
+takeTurn world = 
     let 
         helper world x y xCap yCap = if (y >= yCap)
             then []
@@ -56,3 +83,11 @@ taketurn world =
                 then []:helper world 0 (y+1) xCap yCap
                 else (cellTurn (getCell world x y) world x y) `headCons` (helper world (x+1) (y) xCap yCap)
     in (World (helper world 0 0 (worldX world ) (worldY world)))
+
+--not purely functional repeats infinitely 
+takeTurnRepeat (oldWorld,nextWorld) = do
+    print oldWorld
+    if (oldWorld /= nextWorld)
+        then takeTurnRepeat $ takeTurnReturn nextWorld
+        else print nextWorld
+
