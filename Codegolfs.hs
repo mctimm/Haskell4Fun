@@ -44,4 +44,55 @@ _ `justPlus` _ = Nothing
 (x:xs) \.\ (y:ys) = (Just (x*y) `justPlus` (xs \.\ ys)) 
 _ \.\ _ = Nothing
 
-succId = (id.succ)
+
+i y= and[x+foldr(\x y->(fromEnum x-48)+y)0(show x)/=y|x<-[0..y]]
+
+--w [x] n = []
+--w (x:xs) n = (x*n):(w xs n)
+
+w x n=sum(init(map(*n) x)++(last x:[]))
+
+permutations [] = []
+permutations [x]  = [[x]] 
+permutations (x:xs) = [(take i y) ++ (x:[]) ++ (drop i y)| y<-(permutations xs), i<-[0..length xs]]
+
+--uniqueElems [] = 0
+--uniqueElems [x] = 1
+uniqueElems :: (Eq a) => [a]-> Int
+uniqueElems =  (length.removeDuplicates)
+
+removeDuplicates :: (Eq a) => [a] -> [a]
+removeDuplicates = foldr (\x xs-> x:(filter (x/=) xs)) []
+
+supermutationChecker xs = 
+    let
+        lists = (permutations.removeDuplicates) xs
+        elems = uniqueElems xs
+        helper xs n [] = True
+        helper xs n (y:ys) = (any id [(take n (drop j xs)) == y| j<-[0..length xs]]) && helper xs n ys
+    in helper xs elems lists
+
+--solveRPN :: (Read a, Num a) => String -> a
+--solveRPN xs = 
+--    
+--       
+--       
+--    in helper xs []
+
+operators = ['+', '*', '-']
+
+helper2 '+' = (+)
+helper2 '-' = (-)
+helper2 '*' = (*)
+helper2 _  = mod
+
+helper3 (x:xs) acc = if x == ' '
+            then (acc,xs)
+            else helper3 xs (acc*10 + (read $  x:[] ))
+
+helper [] ys = head ys
+helper u@(x:xs) ys = if x >= '0' && x <= '9'
+    then helper (snd (helper3 xs (read $ x:[]))) (fst (helper3 xs (read $ x:[])):ys)
+    else if x `elem` operators
+        then helper xs (((helper2 x) (head ys)  (head (tail ys))):ys)
+        else helper xs ys
