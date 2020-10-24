@@ -96,3 +96,26 @@ helper u@(x:xs) ys = if x >= '0' && x <= '9'
     else if x `elem` operators
         then helper xs (((helper2 x) (head ys)  (head (tail ys))):ys)
         else helper xs ys
+
+isLetter x = (q >= fromEnum 'A' && q < fromEnum 'Z') || ( q >= fromEnum 'a' && q <= fromEnum 'z') where q = fromEnum x
+
+modeSentence xs = 
+    let 
+        helper [] 0 ls = ls
+        helper [] acc ls = acc:ls
+        helper (x:xs) acc ls = if isLetter x
+        then helper xs (succ acc) ls
+        else if acc /= 0
+            then helper xs 0 (acc:ls)
+            else helper xs acc ls
+    in mode (helper xs 0 [])
+
+mode xs = 
+    let listAdder x acc = if any id $ map (\y -> (x == ) (fst y)) acc
+            then map (\y -> if (x== fst y) then (fst y,(snd y)+1) else y) acc 
+            else ((x,1)):acc
+        helper [] acc = acc
+        helper (x:xs) acc = helper xs (listAdder x acc)
+    in fst $ foldr (\x y-> if snd x > snd y then x else y) (head xs,0) (helper xs [])
+
+k x=mod x 2<1 
