@@ -4,15 +4,17 @@ import Data.Array
 import System.IO
 import Data.Bits
 import Control.Monad.Trans.State.Lazy
+import System.Random
+import Control.Monad.IO.Class
 
-data Line = Line Int Statement deriving (Show)
-data Statement = Let Expr Expr | Print Expr | END deriving (Show)
+data Line = Line Int Statement deriving (Show, Eq)
+data Statement = Let Expr Expr | Print Expr | END deriving (Show, Eq)
 -- data Expr = INT Int | RND Int | Var [Char] | ConstInt Int |Constr [Char] | Value Expr | PowerExpr Value PowerExpr
 --             MultExpr PowerExpr MultExpr | NegateExpr MultExpr|  AddExpr NegateExpr AddExpr| ComExpr AddExpr ComExpr|  NotExpr ComExpr| AndExpr NotExpr AndExpr| OrExpr AndExpr OrExpr
 --             | PrintList Expr PrintList | ExprList Expr ExprList 
 data Expr = INT Expr | RND Expr | Var [Char] | ConstInt Int |Constr [Char] | Value Expr | PowerExpr Expr Expr [Char]
             | MultExpr Expr Expr [Char] | NegateExpr Expr |  AddExpr Expr Expr [Char] | ComExpr Expr Expr [Char]|  NotExpr Expr | AndExpr Expr Expr [Char] | OrExpr Expr Expr [Char]
-            | PrintList Expr Expr [Char]| ExprList Expr Expr [Char] deriving (Show)
+            | PrintList Expr Expr [Char]| ExprList Expr Expr [Char] deriving (Show, Eq)
  
 
 newLine = char '\n'
@@ -44,7 +46,7 @@ printList = chainerFinal1 [",",";"] expr PrintList
 
 exprList = chainerFinal1 [","] expr ExprList
 
-value =  token (variable +++ function +++ constant +++ do {token $ char '('; e <- expr; token $ char ')';return $ Value e})
+value =  token ( function +++ variable +++ constant +++ do {token $ char '('; e <- expr; token $ char ')';return $ Value e})
 
 constant :: Parser Expr
 constant = do { x<-int; return $ ConstInt x} +++ do {str <-token $ wordGrabber; return $ Constr str} 
@@ -158,9 +160,15 @@ runExpr (NotExpr expr) =  (\x -> if (x == 0) then 1 else 0) <$> (runExpr expr)
 runExpr (Value expr) =  runExpr expr
 runExpr (ConstInt n) =  return $ n
 runExpr (INT expr) =  runExpr expr --work on this
-runExpr (RND expr) =  runExpr expr
+runExpr (RND expr) =  do { exp<-(runExpr expr);x<- (liftIO (randomRIO (0, exp - 1))) ; return x}
 runExpr (Var name) = do {globalState <- get ;runExpr (tupleListGetSnd name globalState)}
 
+runPrintSymbol "," x y =  ((x ++ " ") ++ y) 
+runPrintSymbol ";" x y = ((x ++ "\t") ++ y)
+printRunExpr ::  Expr -> StateT [([Char],Expr)] IO String
+printRunExpr (PrintList expr1 expr2 symbol) =  (runPrintSymbol symbol) <$> (printRunExpr expr1) <*> (printRunExpr expr2)
+printRunExpr (Constr string) = return string
+printRunExpr x = do { result<-(runExpr x);return $ show result}
 
 updateState [] x = [x]
 updateState (u@(x1,y1):globalState) q@(x2,y2) = if x1 == x2
@@ -168,12 +176,20 @@ updateState (u@(x1,y1):globalState) q@(x2,y2) = if x1 == x2
     else u:(updateState globalState q)
 
 --this is the current working area
---runStatement _ (END) = return Nothing
---runStatement lineNumber (Let name value) = do {globalState<-get;put (updateState globalState (name,value)); return (Just (succ lineNumber))}
---runStatement lineNumber (Print 
+runStatement _ (END) = return Nothing
+runStatement lineNumber (Let (Var name) value) = do {valueRan<-runExpr value; globalState<-get;put (updateState globalState (name,ConstInt valueRan)); return (Just (succ lineNumber))}
+runStatement lineNumber (Print expr1) = do {printable<-(printRunExpr expr1); (liftIO (putStr printable)); return (Just (succ lineNumber))}
+
+unjust Nothing = -1
+unjust (Just x) = x
+
+mainLoop :: Array Int Line -> Int -> StateT [([Char], Expr)] IO (Maybe Int) 
+mainLoop input lineNumber = do
+    x <- runStatement lineNumber (getStatement (input ! lineNumber))
+    if x /= Nothing then mainLoop input (unjust x) else return x
 
 main = do 
     handle <- openFile "BasicFiles\\foo.bas" ReadMode
     rawInput <- hGetContents handle
     let input = parseFile 0 [] rawInput []
-    putStrLn $ show input
+    runStateT (mainLoop input 0) []
