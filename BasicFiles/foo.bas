@@ -1,5 +1,6 @@
-10 LET A = 2
-20 LET B = 3
-30 LET C = 4
-40 PRINT A * (B + C)
-50 END
+10 Let A = 2
+20 Let B = 3
+30 Let c = 4
+35 leT D = "hey look ma I made it"
+40 PrINT a * (B + C)
+50 ENd
