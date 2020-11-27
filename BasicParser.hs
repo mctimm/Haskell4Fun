@@ -12,14 +12,14 @@ import Data.Ix
 import Data.IORef
 
 data Line = Line Int Statement deriving (Show)
-data Statement = Statements Statement Statement [Char] | Let Expr Expr | Print Expr | END | Return |IF Expr Int | For Expr Expr Expr Expr| Next Expr Expr Expr Int | UNext Expr
-                    |Input [Char] Expr | Goto Int | Gosub Int | Rem Expr | Dim Expr deriving (Show) 
+data Statement = Statements Statement Statement [Char] | Let Expr Expr | Print Expr | END | Return |IF Expr Int | For Expr Expr Expr Expr| Next Expr Expr Expr Int | UNext Expr | NextBuddy Statement Statement [Char]
+                    |Input [Char] Expr | Goto Int | Gosub Int | Rem Expr | Dim Expr | On Expr [Int] | InputBuddy Statement Statement [Char] deriving (Show) 
 -- data Expr = INT Int | RND Int | Var [Char] | ConstInt Int |Constr [Char] | Value Expr | PowerExpr Value PowerExpr
 --             MultExpr PowerExpr MultExpr | NegateExpr MultExpr|  AddExpr NegateExpr AddExpr| ComExpr AddExpr ComExpr|  NotExpr ComExpr| AndExpr NotExpr AndExpr| OrExpr AndExpr OrExpr
 --             | PrintList Expr PrintList | ExprList Expr ExprList | SingleArray Variable ExprList| ArrayList SingleArray ArrayList | Null
 data Expr = INT Expr | RND Expr | Var [Char] | ConstInt Double |Constr [Char] | Value Expr | PowerExpr Expr Expr [Char]
             | MultExpr Expr Expr [Char] | NegateExpr Expr |  AddExpr Expr Expr [Char] | ComExpr Expr Expr [Char]|  NotExpr Expr | AndExpr Expr Expr [Char] | OrExpr Expr Expr [Char]
-            | PrintList Expr Expr [Char]| ExprList Expr Expr [Char] | SingleArray Expr Expr| ArrayList Expr Expr [Char] | Null | ConstArray BasicArray| ArrayAcess Expr Expr deriving (Show)
+            | PrintList Expr Expr [Char]| ExprList Expr Expr [Char] | SingleArray Expr Expr| ArrayList Expr Expr [Char] | Null | ConstArray BasicArray| ArrayAcess Expr Expr| Tab Expr deriving (Show)
 
 
 newLine = char '\n'
@@ -34,7 +34,7 @@ statement = do {x<-int;s<-multiStatements;statementEnder;return (Line x s)}
 
 multiStatements = do {kevin <-statements ; (kevinList, separator)<-chainerExpr ":" multiStatements; return $ Statements kevin kevinList separator} +++ statements 
 
-statements = endStatement +++ letStatement  +++ forStatement +++ nextStatement +++ ifStatement +++ inputStatement +++ gotoStatement +++ printStatement +++ remStatement +++ dimStatement +++ gosubStatement +++ returnStatement
+statements = endStatement +++ letStatement  +++ forStatement +++ nextStatement +++ ifStatement +++ inputStatement +++ gotoStatement +++ printStatement +++ remStatement +++ dimStatement +++ gosubStatement +++ returnStatement +++ onStatement
 
 forStatement =do {statementStarter "FOR"; i<-variable; token $ char '='; expr1 <- expr; token $ string "TO"; expr2 <- expr; token $ string "STEP" ; expr3 <- expr;  return $ (For i expr1 expr2 expr3)} +++  do {x<-statementStarter "FOR"; i<-variable; token $ char '='; expr1 <- expr; token $ string "TO"; expr2 <- expr; return $ (For i expr1 expr2 (ConstInt(1)))}
 
@@ -42,7 +42,9 @@ gosubStatement = do {statementStarter "GOSUB";  gotoNum<-int; return $ (Gosub go
 
 returnStatement = do {statementStarter "RETURN"; return $ Return}
 
-nextStatement = do {statementStarter "NEXT"; i<-variable; return $ (UNext i)}
+nextStatement = do {statementStarter "NEXT";i<-variable; nb<-nextBuddy; return $ NextBuddy (UNext i) (nb) ""} +++ do {statementStarter "NEXT"; i<-variable; return $ (UNext i)}
+
+nextBuddy = do {token $ char ',';i<-variable; nb<-nextBuddy;return $ NextBuddy (UNext i) (nb) ""} +++ do {token $ char ',';i<-variable; return $ (UNext i)}
 
 ifStatement = do {statementStarter "IF" ; exp<-expr; token $ string "THEN"; gotoNum<-int; return ((IF exp gotoNum))}
 
@@ -52,24 +54,31 @@ remStatement = do {statementStarter "REM"; str<-many $ sat (/= '$'); return ((Re
 
 dimStatement = do {statementStarter "DIM"; kevin<-arrayList; return ((Dim kevin))}
 
-letStatement = do {statementStarter "LET"; v<-variable; token (char '('); y<-exprList; token (char ')'); token (char '='); x<-expr; return $ (Let (ArrayAcess v y) x)} +++ (do {statementStarter "LET"; v<-variable; token (char '='); x<-expr; return $ (Let v x) })
+letStatement = do {statementStarter "LET"; v<-variable; token (char '('); y<-exprList; token (char ')'); token (char '='); x<-expr; return $ (Let (ArrayAcess v y) x)} +++ (do {statementStarter "LET"; v<-variable; token (char '='); x<-expr; return $ (Let v x) }) +++ do { v<-variable; token (char '('); y<-exprList; token (char ')'); token (char '='); x<-expr; return $ (Let (ArrayAcess v y) x)} +++ (do {v<-variable; token (char '='); x<-expr; return $ (Let v x) })
 
 printStatement = do {statementStarter "PRINT"; printer <- token $ printList; return $  (Print printer)}
 
 gotoStatement = do {statementStarter "GOTO"; gotoNum<-int; return $ (Goto gotoNum)}
 
-inputStatement = do {statementStarter "INPUT";prompt<- wordGrabber ;token $ char ';' ;v<-variable;return $ (Input prompt v)} +++ do {statementStarter "INPUT"; v<-variable; return $  (Input "" v)}
+onStatement = do {statementStarter "ON"; e <- expr; statementStarter "GOTO"; j<-int; i<-intBuddy; return $ On e (j:i)} +++  do {statementStarter "ON"; e <- expr; statementStarter "GOTO"; j<-int; return $ On e [j]}
 
-variable = do {c <-token driversLicense;token (char '('); y<-exprList; token (char ')'); return $ ArrayAcess (Var c) y} +++  do {c <-token driversLicense; return $ Var c}
+intBuddy:: Parser [Int]
+intBuddy = do {token $ char ','; i <-int;ib<-intBuddy;return (i:ib)} +++ do {token $ char ','; i <-int;return [i]}
+
+inputStatement = do {statementStarter "INPUT";prompt<- wordGrabber;token $ char ';' ;v<-variable;ib<-inputBuddy;return $ InputBuddy (Input prompt v) (ib) ""} +++ do {statementStarter "INPUT"; v<-variable; ib<-inputBuddy; return $ InputBuddy (Input "" v) (ib) ""} +++ do {statementStarter "INPUT";prompt<- wordGrabber ;token $ char ';' ;v<-variable;return $ (Input prompt v)} +++ do {statementStarter "INPUT"; v<-variable; return $  (Input "" v)}
+
+inputBuddy = do {token $ char ',';i<-variable; nb<-inputBuddy;return $ InputBuddy (Input "" i) (nb) ""} +++ do {token $ char ',';i<-variable; return $ (Input "" i)}
+
+variable = do {c <-token driversLicense;token (char '('); y<-exprList; token (char ')'); return $ ArrayAcess (Var (c ++ "@")) y} +++  do {c <-token driversLicense; return $ Var c}
 
 --this is the dumbest necessary function
-arrayvar =  do {c <-token driversLicense; return $ Var c}
+arrayvar =  do {c <-token driversLicense; return $ Var (c ++ "@")}
 
 printList = chainerFinalPrint [",",";"] expr PrintList
 
 exprList = chainerFinal1 [","] expr ExprList
 
-value =  token ( function +++ variable +++ constant +++ do {token $ char '('; e <- expr; token $ char ')';return $ Value e})
+value =  token ( function +++ do {statementStarter "TAB";token $ char '('; e <- expr; token $ char ')';return $Tab e } +++ variable +++ constant +++  do {token $ char '('; e <- expr; token $ char ')';return $ Value e})
 
 constant :: Parser Expr
 constant = do { x<-int; return $ ConstInt (fromIntegral x)} +++ do {str <-token $ wordGrabber; return $ Constr str} 
@@ -149,17 +158,23 @@ singleRenumber ls (Statements statement1 statement2 sep) = (Statements (singleRe
 singleRenumber ls (Gosub gotoNum) = (Gosub (tupleListGetSnd gotoNum ls))
 singleRenumber ls (IF x gotoNum) = (IF x (tupleListGetSnd gotoNum ls))
 singleRenumber ls (Goto gotoNum) = (Goto (tupleListGetSnd gotoNum ls))
+singleRenumber ls (On e gotonums) = (On e (map (`tupleListGetSnd` ls) gotonums))
 singleRenumber ls x = x
 
 fileRenumber lsln = map (statementRenumber lsln)
 
 forLinker _ _ _ [] = []
 forLinker forLines forSteps forEnds (u@(Line n (For (Var variable) expr2 expr3 step)):lsStatements)  = u:(forLinker ((variable,n):forLines) ((variable,step):forSteps) ((variable,expr3):forEnds) lsStatements )
-forLinker forLines forSteps forEnds ((Line n (UNext (Var variable))):lsStatements)  = ((Line n (Next (Var variable) (tupleListGetSnd variable forEnds) (tupleListGetSnd variable forSteps) (tupleListGetSnd variable forLines) ))):(forLinker forLines forSteps forEnds lsStatements )
+forLinker forLines forSteps forEnds ((Line n u@(UNext (Var variable))):lsStatements)  = ((Line n (nextMaker forLines forSteps forEnds u))):(forLinker forLines forSteps forEnds lsStatements )
 forLinker forLines forSteps forEnds ((Line n u@(Statements statement1 statement2 c)):lsStatements) =
     let (v,(forLines2, forSteps2, forEnd2)) = forLinker2 forLines forSteps forEnds n u
     in (Line n v):(forLinker forLines2 forSteps2 forEnd2 lsStatements) 
+forLinker forLines forSteps forEnds ((Line n u@(NextBuddy statement1 statement2 c)):lsStatements) =
+    let (v,(forLines2, forSteps2, forEnd2)) = forLinker3 forLines forSteps forEnds n u
+    in (Line n v):(forLinker forLines2 forSteps2 forEnd2 lsStatements)     
 forLinker forLines forSteps forEnds (currentline:lsStatements) = currentline:(forLinker forLines forSteps forEnds lsStatements )
+
+nextMaker forLines forSteps forEnds (UNext (Var variable)) = (Next (Var variable) (tupleListGetSnd variable forEnds) (tupleListGetSnd variable forSteps) (tupleListGetSnd variable forLines))
 
 
 forLinker2 forLines forSteps forEnds n (Statements (UNext (Var variable)) statement2 c) = 
@@ -174,6 +189,19 @@ forLinker2 forLines forSteps forEnds n (Statements u statement2 c) =
 forLinker2 forLines forSteps forEnds n (UNext (Var variable)) = ((Next (Var variable) (tupleListGetSnd variable forEnds) (tupleListGetSnd variable forSteps) (tupleListGetSnd variable forLines) ), (forLines, forSteps, forEnds))
 forLinker2 forLines forSteps forEnds n u@(For (Var variable) expr2 expr3 step) = (u,(((variable,n):forLines),((variable,step):forSteps),((variable,expr3):forEnds)))
 forLinker2 forLines forSteps forEnds n s = (s,(forLines,forSteps, forEnds))
+
+forLinker3 forLines forSteps forEnds n (NextBuddy (UNext (Var variable)) statement2 c) = 
+    let (u2,lss) = (forLinker2 (forLines) (forSteps) (forEnds) n statement2)
+    in (NextBuddy (Next (Var variable) (tupleListGetSnd variable forEnds) (tupleListGetSnd variable forSteps) (tupleListGetSnd variable forLines) ) u2 c, lss)
+forLinker3 forLines forSteps forEnds n (NextBuddy u@(For (Var variable) expr2 expr3 step) statement2 c) =
+    let (u2,lss) = (forLinker2 ((variable,n):forLines) ((variable,step):forSteps) ((variable,expr3):forEnds) n statement2) 
+    in(NextBuddy u u2 c, lss) 
+forLinker3 forLines forSteps forEnds n (NextBuddy u statement2 c) =
+    let (u2,lss) = (forLinker2 (forLines) (forSteps) (forEnds) n statement2)
+    in (NextBuddy u u2 c , lss) 
+forLinker3 forLines forSteps forEnds n (UNext (Var variable)) = ((Next (Var variable) (tupleListGetSnd variable forEnds) (tupleListGetSnd variable forSteps) (tupleListGetSnd variable forLines) ), (forLines, forSteps, forEnds))
+forLinker3 forLines forSteps forEnds n u@(For (Var variable) expr2 expr3 step) = (u,(((variable,n):forLines),((variable,step):forSteps),((variable,expr3):forEnds)))
+forLinker3 forLines forSteps forEnds n s = (s,(forLines,forSteps, forEnds))
 
 parseFile lineNumber lsln "$" stateLs = listArray (0,pred lineNumber) $ (forLinker [] [] []) $ reverse $ fileRenumber lsln stateLs
 parseFile lineNumber lsln [] stateLs = listArray (0,pred lineNumber) $ (forLinker [] [] []) $ reverse $ fileRenumber lsln stateLs
@@ -237,6 +265,7 @@ runExpr (INT expr) =  do {exp<-runExpr expr; return $fromIntegral $  floor exp} 
 runExpr (RND expr) =  do { exp<-(runExpr expr);x<-(liftIO (randomRIO (0, exp))) ;if exp == 1 then return x else return  (fromIntegral $ pred $ flooring x)}
 runExpr (Var name) = do {globalState <- get ;runExpr (tupleListGetSnd name globalState)}
 runExpr (ArrayAcess (Var name) key) =  do {globalState <- get; key1<-(runExprList key);return $ getConstArray (tupleListGetSnd name globalState) (map floor key1)}
+runExpr (ConstArray x) = return 0.0
 
 runExprList (ExprList expr1 expr2 _) = do {e<-(runExpr expr1); e2 <- (runExprList expr2); return (e:e2)}
 runExprList expr1 = do {e<-(runExpr expr1) ; return (e:[])}
@@ -245,15 +274,17 @@ runArrayList :: Expr ->  RWST (IORef [Int]) [Char] [([Char],Expr)] IO [([Char], 
 runArrayList (SingleArray (Var name) exprList1) = do {e1<-runExprList exprList1; return ((name,ConstArray $ basicArray (map floor e1)):[])}
 runArrayList (ArrayList expr1 expr2 _ ) = do {a<-(runArrayList expr1); a2 <- (runArrayList expr2); return (a ++ a2)}
 
-
+runPrintSymbol " " x y = x ++ y
 runPrintSymbol "," x y =  ((x ++ " ") ++ y) 
 runPrintSymbol ";" x y = ((x ++ "\t") ++ y)
 printRunExpr ::  Expr ->  RWST (IORef [Int]) [Char] [([Char],Expr)] IO String
 printRunExpr (Null) = (return "$")
+printRunExpr (PrintList expr1@(Constr string) expr2 ";") =  (runPrintSymbol " ") <$> (printRunExpr expr1) <*> (printRunExpr expr2)
 printRunExpr (PrintList expr1 expr2 symbol) =  (runPrintSymbol symbol) <$> (printRunExpr expr1) <*> (printRunExpr expr2)
 printRunExpr (Constr string) = return string
 printRunExpr (Var x) = do{global<-get; printRunExpr (tupleListGetSnd x global)}
 printRunExpr (ConstArray bs) = do {return $ show bs}
+printRunExpr (Tab n) = do {n1 <- runExpr n; return $ take (floor n1) $  repeat ' '}
 printRunExpr x = do { result<-(runExpr x);return $ shouldFloor result}
 
 updateState [] x = [x]
@@ -268,7 +299,8 @@ removeState (u@(x1,y1):globalState) q@(x2,y2) = if x1 == x2
 checkGlobalState str [] = False;
 checkGlobalState str (x:xs) = (str == fst x) || (checkGlobalState str xs)
 
---this is the current working area
+runStatements lineNumber (InputBuddy input1 ib _) = do {runStatement lineNumber input1; runStatements lineNumber ib; return $ Just (succ lineNumber)}
+runStatements lineNumber (NextBuddy next nb _) = do {ln2 <-runStatement lineNumber next; if ln2 == Just (succ lineNumber) then runStatements lineNumber nb else return ln2}
 runStatements lineNumber (Statements statement1 statement2 _) = do {statement1Number<-runStatement lineNumber statement1;statement2Number<-runStatements lineNumber statement2; return $ if statement1Number == (Just (succ lineNumber)) then statement2Number else statement1Number}
 runStatements lineNumber x = runStatement lineNumber x
 
@@ -287,7 +319,7 @@ runStatement lineNumber (Print expr1) = do {printable<-(printRunExpr expr1); if 
 runStatement lineNumber (Input prompt (Var name)) = do {(liftIO $putStr (prompt ++ "\t" ));liftIO (hFlush stdout) ;input<-(liftIO getLine); globalState<-get;put (updateState globalState (name, takeInput input )); return (Just (succ lineNumber))}
 runStatement lineNumber (Rem _) = return (Just (succ lineNumber))
 runStatement lineNumber (Dim expr) = do {listOfArrays<-runArrayList expr; globalState<-get;put (listOfArrays ++ globalState); return  (Just (succ lineNumber))}
-
+runStatement lineNumber (On e gotonums) = do {e1<-runExpr e ;if (floor e1) <= length gotonums && (floor e1) > 0 then return $ Just (gotonums !! ((floor e1) - 1)) else return $ Just (succ lineNumber)}
 
 
 updateArrayAccess :: [Char] -> [Int] -> Double -> RWST (IORef [Int]) [Char] [([Char],Expr)] IO String 
@@ -332,7 +364,7 @@ makeBasicArray (x:xs) acc = makeBasicArray xs ((x * (head acc) ):acc)
 
 
 initBasicArray :: [Int] -> BasicArray -> BasicArray
-initBasicArray inits (BasicArray [] acc) = BasicArray (take (product inits) (repeat 0.0)) acc
+initBasicArray inits (BasicArray [] acc) = BasicArray (take  (product (map succ inits)) (repeat 0.0)) acc
 
 basicArray :: [Int] -> BasicArray
 basicArray xs = initBasicArray xs (makeBasicArray (reverse xs) [1]) 
@@ -341,6 +373,7 @@ accessBasicArray (BasicArray vals indexes) xs =  vals !! (buildIndex xs indexes)
 
 setBasicArray (BasicArray vals indexes) xs val = (BasicArray (insertValIntoList vals val (buildIndex xs indexes)) indexes)
 
+insertValIntoList [] val _ = []
 insertValIntoList (v:vals) val 0 = val:vals
 insertValIntoList (v:vals) val n = v:(insertValIntoList vals val (pred n))
 
